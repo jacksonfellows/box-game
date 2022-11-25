@@ -191,16 +191,36 @@ function winning_player() {
 	return 0;
 }
 
-function handle_player() {
-	// if (STATE.current_player == 1) {
-		// canvas.onclick = handle_player_click;
-	// } else if (STATE.current_player == 2) {
+function handle_human() {
+	canvas.onclick = handle_player_click;
+}
+
+function handle_ai(ai) {
+	return function() {
 		canvas.onclick = null;
 		setTimeout(
-			_ => play_line(random_ai()),
+			_ => play_line(ai()),
 			0
 		);
-	// }
+	};
+}
+
+let PLAYERS_MAP = {
+	1: handle_ai(most_capture_ai),
+	2: handle_ai(most_capture_ai),
+};
+
+function handle_player() {
+	PLAYERS_MAP[STATE.current_player]();
+}
+
+function get_captured_by_move(coord_to_try, graph) {
+	let all_cycles = find_all_cycles(graph, coord_to_num(coord_to_try), []);
+	let captured = [];
+	if (all_cycles.length > 0) {
+		captured = all_cycles.map(get_captured).reduce((a, b) => a.length >= b.length ? a : b);
+	}
+	return captured;
 }
 
 function play_line(line) {
@@ -211,14 +231,10 @@ function play_line(line) {
 	add_edge(STATE.dot_graph, coord_to_num(coord1), coord_to_num(coord2));
 
 	// perform capturing
-	let coord_to_try = coord1; // could be coord2 doesn't matter
-	let all_cycles = find_all_cycles(STATE.dot_graph, coord_to_num(coord_to_try), []);
-	if (all_cycles.length > 0) {
-		let captured = all_cycles.map(get_captured).reduce((a, b) => a.length >= b.length ? a : b);
-		for (let [r,c] of captured) {
-			STATE.captured[(r - 1) / 2][(c - 1) / 2] = STATE.current_player;
-			prune_graph(STATE.dot_graph, STATE.captured, [r,c]);
-		}
+	let captured = get_captured_by_move(coord1, STATE.dot_graph); // could be coord2 doesn't matter
+	for (let [r,c] of captured) {
+		STATE.captured[(r - 1) / 2][(c - 1) / 2] = STATE.current_player;
+		prune_graph(STATE.dot_graph, STATE.captured, [r,c]);
 	}
 
 	redraw();
@@ -295,17 +311,17 @@ function edge_between(coord1, coord2) {
 	}
 }
 
-function cycle_to_edges(cycle) {
-	let edges = [];
+function cycle_to_edges_set(cycle) {
+	let edges = new Set();
 	for (let i = 0; i < cycle.length - 1; i++) {
-		edges.push(edge_between(cycle[i], cycle[i + 1]));
+		edges.add(coord_to_num(edge_between(cycle[i], cycle[i + 1])));
 	}
-	edges.push(edge_between(cycle[cycle.length - 1], cycle[0]));
+	edges.add(coord_to_num(edge_between(cycle[cycle.length - 1], cycle[0])));
 	return edges;
 }
 
 function coord_in_cycle(cycle, coord) {
-	let edges = new Set(cycle_to_edges(cycle).map(coord_to_num));
+	let edges = cycle_to_edges_set(cycle);
 	let [r, c] = coord;
 	// up
 	let n_crosses = 0;
@@ -367,13 +383,56 @@ function edge_inside_captured_area(edge, captured) {
 	}
 }
 
-function random_ai() {
-	while (1) {
-		let r = randint(2 * CONFIG.n_rows + 1);
-		let c = randint(2 * CONFIG.n_cols + 1);
-		if ((r % 2 != c % 2) && !STATE.board.includes(coord_to_num([r, c])) && !edge_inside_captured_area([r, c], STATE.captured)) {
-			return [r, c];
+function get_valid_moves() {
+	let moves = [];
+	for (let r = 0; r < 2 * CONFIG.n_rows + 1; r++) {
+		for (let c = 0; c < 2 * CONFIG.n_cols + 1; c++) {
+			if ((r % 2 != c % 2) && !STATE.board.includes(coord_to_num([r, c])) && !edge_inside_captured_area([r, c], STATE.captured)) {
+				moves.push([r, c]);
+			}
 		}
+	}
+	return moves;
+}
+
+function random_ai() {
+	let moves = get_valid_moves();
+	return moves[randint(moves.length)];
+}
+
+function copy_graph(graph) {
+	let new_graph = {};
+	for (let [k, v] of Object.entries(graph)) {
+		new_graph[k] = new Set(v);
+	}
+	return new_graph;
+}
+
+function shuffle(arr) {
+	for (let i = arr.length - 1; i > 0; i--) {
+		let j = randint(i + 1);
+		let tmp = arr[j];
+		arr[j] = arr[i];
+		arr[i] = tmp;
 	}
 }
 
+function most_capture_ai() {
+	let graph_copy = copy_graph(STATE.dot_graph);
+	let most_captured = -1;
+	let best_move = null;
+	let moves = get_valid_moves();
+	shuffle(moves);
+	for (let line of moves) {
+		// see how good this move is
+		let [coord1, coord2] = coords_astride(line);
+		add_edge(graph_copy, coord_to_num(coord1), coord_to_num(coord2));
+		let captured = get_captured_by_move(coord1, graph_copy);
+		if (captured.length > most_captured) {
+			most_captured = captured.length;
+			best_move = line;
+		}
+		remove_edge(graph_copy, coord_to_num(coord1), coord_to_num(coord2)); // cleanup!!
+	}
+	return best_move;
+}
