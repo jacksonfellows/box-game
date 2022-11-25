@@ -98,7 +98,6 @@ function make_empty_captured() {
 
 var STATE = {
 	board: [],
-	cycles: [],
 	captured: make_empty_captured(),
 	current_player: 1,
 	dot_graph: {}
