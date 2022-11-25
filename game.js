@@ -128,14 +128,20 @@ function coords_astride(edge) {
 }
 
 function add_edge(graph, c1, c2) {
-	graph[c1] = (graph[c1] || []).concat([c2]);
-	graph[c2] = (graph[c2] || []).concat([c1]);
+	if (!graph[c1]) {
+		graph[c1] = new Set();
+	}
+	if (!graph[c2]) {
+		graph[c2] = new Set();
+	}
+	graph[c1].add(c2);
+	graph[c2].add(c1);
 }
 
 function remove_edge(graph, c1, c2) {
-	if (graph[c1] && graph[c1].includes(c2)) {
-		graph[c1] = (graph[c1] || []).filter(x => x != c2);
-		graph[c2] = (graph[c2] || []).filter(x => x != c1);
+	if (graph[c1] && graph[c2]) {
+		graph[c1].delete(c2);
+		graph[c2].delete(c1);
 	}
 }
 
@@ -299,12 +305,12 @@ function cycle_to_edges(cycle) {
 }
 
 function coord_in_cycle(cycle, coord) {
-	let edges = cycle_to_edges(cycle).map(coord_to_num);
+	let edges = new Set(cycle_to_edges(cycle).map(coord_to_num));
 	let [r, c] = coord;
 	// up
 	let n_crosses = 0;
 	for (let n = coord_to_num([r - 1, c]); n >= 0; n -= 2 * (2 * CONFIG.n_cols + 1)) {
-		if (edges.includes(n)) {
+		if (edges.has(n)) {
 			n_crosses += 1;
 		}
 	}
@@ -314,7 +320,7 @@ function coord_in_cycle(cycle, coord) {
 	// down
 	n_crosses = 0;
 	for (let n = coord_to_num([r + 1, c]); n <= (2 * CONFIG.n_rows + 1) * (CONFIG.n_cols * 2 + 1); n += 2 * (2 * CONFIG.n_cols + 1)) {
-		if (edges.includes(n)) {
+		if (edges.has(n)) {
 			n_crosses += 1;
 		}
 	}
@@ -324,7 +330,7 @@ function coord_in_cycle(cycle, coord) {
 	// left
 	n_crosses = 0;
 	for (let n = coord_to_num([r, c - 1]); n >= r * (2 * CONFIG.n_cols + 1); n -= 2) {
-		if (edges.includes(n)) {
+		if (edges.has(n)) {
 			n_crosses += 1;
 		}
 	}
@@ -334,7 +340,7 @@ function coord_in_cycle(cycle, coord) {
 	// right
 	n_crosses = 0;
 	for (let n = coord_to_num([r, c + 1]); n < (r + 1) * (2 * CONFIG.n_cols + 1); n += 2) {
-		if (edges.includes(n)) {
+		if (edges.has(n)) {
 			n_crosses += 1;
 		}
 	}
