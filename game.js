@@ -36,11 +36,11 @@ function draw_dots() {
 }
 
 function get_player_stroke(p) {
-	return ["", "#00aa00", "#0000aa"][p];
+	return ["#00aa00", "#0000aa"][p - 1];
 }
 
 function get_player_fill(p) {
-	return ["", "#ddffdd", "#ddddff"][p];
+	return ["#ddffdd", "#ddddff"][p - 1];
 }
 
 function draw_board(board) {
