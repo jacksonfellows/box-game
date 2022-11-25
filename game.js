@@ -2,8 +2,8 @@ var canvas = document.getElementById("mycanvas");
 var ctx = canvas.getContext("2d");
 
 var CONFIG = {
-	n_rows: 5,
-	n_cols: 7,
+	n_rows: 2,
+	n_cols: 2,
 	width: canvas.width,
 	height: canvas.width
 };
@@ -35,24 +35,38 @@ function draw_dots() {
 	ctx.restore();
 }
 
+function get_player_color(p) {
+	return ["", "#00ff00", "#0000ff"][p];
+}
+
 function draw_board(board) {
 	ctx.save();
 	ctx.setTransform(TRANSFORM);
-	ctx.lineWidth = 2 / SCALE;
+	let i = 0;
 	for (let [r, c] of board) {
+		let start, end;
 		if (r % 2 == 0) {
 			// horizontal
-			ctx.beginPath();
-			ctx.moveTo(c - 1, r);
-			ctx.lineTo(c + 1, r);
-			ctx.stroke();
+			start = [c - 1, r];
+			end = [c + 1, r];
 		} else if (c % 2 == 0) {
 			// vertical
-			ctx.beginPath();
-			ctx.moveTo(c, r - 1);
-			ctx.lineTo(c, r + 1);
-			ctx.stroke();
+			start = [c, r - 1];
+			end = [c, r + 1];
 		}
+		ctx.strokeStyle = "#000000";
+		ctx.lineWidth = 4 / SCALE;
+		ctx.beginPath();
+		ctx.moveTo(...start);
+		ctx.lineTo(...end);
+		ctx.stroke();
+
+		ctx.strokeStyle = get_player_color(i++ % 2 + 1);
+		ctx.lineWidth = 1.5 / SCALE;
+		ctx.beginPath();
+		ctx.moveTo(...start);
+		ctx.lineTo(...end);
+		ctx.stroke();
 	}
 	ctx.restore();
 }
@@ -64,7 +78,7 @@ function draw_captured(captured) {
 		for (let c = 1; c < 2 * CONFIG.n_cols; c += 2) {
 			let cap = STATE.captured[(r - 1) / 2][(c - 1) / 2];
 			if (cap) {
-				ctx.fillStyle = ["", "#00ff00", "#0000ff"][cap];
+				ctx.fillStyle = get_player_color(cap);
 				ctx.beginPath();
 				ctx.moveTo(c - 1, r - 1);
 				ctx.lineTo(c + 1, r - 1);
@@ -92,7 +106,8 @@ var STATE = {
 	board: [],
 	cycles: [],
 	captured: make_empty_captured(),
-	currentPlayer: 1
+	currentPlayer: 1,
+	dot_graph: {}
 };
 
 function get_captured(cycle) {
@@ -108,21 +123,68 @@ function get_captured(cycle) {
 	return captured;
 }
 
+function coords_astride(edge) {
+	let [r,c] = edge;
+	if (r % 2 == 0) {
+		return [[r, c - 1], [r, c + 1]];
+	} else if (c % 2 == 0) {
+		return [[r - 1, c], [r + 1, c]];
+	}
+	console.assert(true);
+	return null;
+}
+
+function add_edge(graph, c1, c2) {
+	graph[c1] = (graph[c1] || []).concat([c2]);
+	graph[c2] = (graph[c2] || []).concat([c1]);
+}
+
+function remove_edge(graph, c1, c2) {
+	if (graph[c1].includes(c2)) {
+		console.log('removing edge', num_to_coord(c1), num_to_coord(c2));
+		graph[c1] = (graph[c1] || []).filter(x => x != c2);
+		graph[c2] = (graph[c2] || []).filter(x => x != c1);
+	}
+}
+
+function prune_graph(graph, captured, captured_coord) {
+	let [r,c] = captured_coord;
+	console.assert(captured[(r - 1) / 2][(c - 1) / 2]);
+	if ((c - 1) / 2 > 0 && captured[(r - 1) / 2][(c - 1) / 2 - 1]) {
+		remove_edge(graph, coord_to_num([r - 1, c - 1]), coord_to_num([r + 1, c - 1]));
+	}
+	if ((c - 1) / 2 < CONFIG.n_cols - 1 && captured[(r - 1) / 2][(c - 1) / 2 + 1]) {
+		remove_edge(graph, coord_to_num([r - 1, c + 1]), coord_to_num([r + 1, c + 1]));
+	}
+	if ((r - 1) / 2 > 0 && captured[(r - 1) / 2 - 1][(c - 1) / 2]) {
+		remove_edge(graph, coord_to_num([r - 1, c - 1]), coord_to_num([r - 1, c + 1]));
+	}
+	if ((r - 1) / 2 < CONFIG.n_rows - 1 && captured[(r - 1) / 2 + 1][(c - 1) / 2]) {
+		remove_edge(graph, coord_to_num([r + 1, c - 1]), coord_to_num([r + 1, c + 1]));
+	}
+}
+
 canvas.onclick = e => {
 	let xy = apply_inverse_transform(TRANSFORM, [e.offsetX, e.offsetY]);
 	let [col_near,row_near] = xy.map(Math.round);
 	if (col_near % 2 != row_near % 2) {
 		STATE.board.push([row_near, col_near]);
-		let coord_to_try = col_near % 2 == 0 ?
-			[row_near - 1, col_near] :
-			[row_near, col_near - 1];
-		let all_cycles = find_all_cycles(STATE.board, coord_to_try, []);
+		let [coord1, coord2] = coords_astride([row_near, col_near]);
+
+		// update graph
+		add_edge(STATE.dot_graph, coord_to_num(coord1), coord_to_num(coord2));
+
+		// perform capturing
+		let coord_to_try = coord1; // could be coord2 doesn't matter
+		let all_cycles = find_all_cycles(STATE.dot_graph, coord_to_num(coord_to_try), []);
 		if (all_cycles.length > 0) {
 			let captured = all_cycles.map(get_captured).reduce((a, b) => a.length >= b.length ? a : b);
 			for (let [r,c] of captured) {
 				STATE.captured[(r - 1) / 2][(c - 1) / 2] = STATE.currentPlayer;
+				prune_graph(STATE.dot_graph, STATE.captured, [r,c]);
 			}
 		}
+
 		STATE.currentPlayer = STATE.currentPlayer == 1 ? 2 : 1;
 	}
 	redraw();
@@ -141,40 +203,28 @@ function coord_eq(a, b) {
 	return a[0] == b[0] && a[1] == b[1];
 }
 
-function contains_coord(board, coord) {
-	let [r_, c_] = coord;
-	for (let [r, c] of board) {
-		if (r == r_ && c == c_) {
-			return true;
-		}
-	}
-	return false;
+function coord_to_num(coord) {
+	let [r,c] = coord;
+	return r * (2 * CONFIG.n_cols + 1) + c;
 }
 
-function get_neighbors(board, coord) {
-	let [r, c] = coord;
-	let neighbors = [];
-	for (let [dr,dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-		if (contains_coord(board, [r + dr, c + dc])) {
-			neighbors.push([r + 2 * dr, c + 2 * dc]);
-		}
-	}
-	return neighbors;
+function num_to_coord(num) {
+	return [Math.floor(num / (2 * CONFIG.n_cols + 1)), num % (2 * CONFIG.n_cols + 1)];
 }
 
-function find_all_cycles(board, coord, visited) {
-	if (visited.length > 0 && coord_eq(visited[0], coord)) {
-		return [visited];
+function find_all_cycles(graph, num, visited) {
+	if (visited.length > 0 && visited[0] == num) {
+		return [visited.map(num_to_coord)];
 	}
 	let cycles = [];
-	for (let neighbor of get_neighbors(board, coord)) {
-		if (visited.length == 1 && coord_eq(neighbor, visited[0])) {
+	for (let neighbor_num of graph[num]) {
+		if (visited.length == 1 && neighbor_num == visited[0]) {
 			continue;
 		}
-		if (contains_coord(visited.slice(1), neighbor)) {
+		if (visited.slice(1).includes(neighbor_num)) {
 			continue;
 		}
-		cycles = cycles.concat(find_all_cycles(board, neighbor, visited.concat([coord])));
+		cycles = cycles.concat(find_all_cycles(graph, neighbor_num, visited.concat([num])));
 	}
 	return cycles;
 }
@@ -199,12 +249,12 @@ function cycle_to_edges(cycle) {
 }
 
 function coord_in_cycle(cycle, coord) {
-	let edges = cycle_to_edges(cycle);
+	let edges = cycle_to_edges(cycle).map(coord_to_num);
 	let [r, c] = coord;
 	// up
 	let n_crosses = 0;
-	for (let r_ = r - 1; r_ >= 0; r_ -= 2) {
-		if (contains_coord(edges, [r_, c])) {
+	for (let n = coord_to_num([r - 1, c]); n >= 0; n -= 2 * (2 * CONFIG.n_cols + 1)) {
+		if (edges.includes(n)) {
 			n_crosses += 1;
 		}
 	}
@@ -213,8 +263,8 @@ function coord_in_cycle(cycle, coord) {
 	}
 	// down
 	n_crosses = 0;
-	for (let r_ = r + 1; r_ <= 2 * CONFIG.n_rows; r_ += 2) {
-		if (contains_coord(edges, [r_, c])) {
+	for (let n = coord_to_num([r + 1, c]); n <= (2 * CONFIG.n_rows + 1) * (CONFIG.n_cols * 2 + 1); n += 2 * (2 * CONFIG.n_cols + 1)) {
+		if (edges.includes(n)) {
 			n_crosses += 1;
 		}
 	}
@@ -223,8 +273,8 @@ function coord_in_cycle(cycle, coord) {
 	}
 	// left
 	n_crosses = 0;
-	for (let c_ = c - 1; c_ >= 0; c_ -= 2) {
-		if (contains_coord(edges, [r, c_])) {
+	for (let n = coord_to_num([r, c - 1]); n >= r * (2 * CONFIG.n_cols + 1); n -= 2) {
+		if (edges.includes(n)) {
 			n_crosses += 1;
 		}
 	}
@@ -233,8 +283,8 @@ function coord_in_cycle(cycle, coord) {
 	}
 	// right
 	n_crosses = 0;
-	for (let c_ = c + 1; c_ <= 2 * CONFIG.n_cols; c_ += 2) {
-		if (contains_coord(edges, [r, c_])) {
+	for (let n = coord_to_num([r, c + 1]); n < (r + 1) * (2 * CONFIG.n_cols + 1); n += 2) {
+		if (edges.includes(n)) {
 			n_crosses += 1;
 		}
 	}
