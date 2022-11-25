@@ -2,17 +2,13 @@ var canvas = document.getElementById("mycanvas");
 var ctx = canvas.getContext("2d");
 
 var CONFIG = {
-	n_rows: 2,
-	n_cols: 2,
-	width: canvas.width,
-	height: canvas.width
+	n_rows: 20,
+	n_cols: 20
 };
 
-canvas.width = CONFIG.width;
-canvas.height = CONFIG.height;
-
-var SCALE = 30;
-var TRANSFORM = {a: SCALE, b: 0, c: 0, d: SCALE, e: 10, f: 10};
+var PAD = 0.2;
+var SCALE = Math.min(canvas.width, canvas.height) / Math.max(2 * CONFIG.n_rows + 2 * PAD, 2 * CONFIG.n_cols + 2 * PAD);
+var TRANSFORM = {a: SCALE, b: 0, c: 0, d: SCALE, e: PAD * SCALE, f: PAD * SCALE};
 
 function apply_inverse_transform(t, xy) {
 	[x, y] = xy;
