@@ -137,8 +137,7 @@ function add_edge(graph, c1, c2) {
 }
 
 function remove_edge(graph, c1, c2) {
-	if (graph[c1].includes(c2)) {
-		console.log('removing edge', num_to_coord(c1), num_to_coord(c2));
+	if (graph[c1] && graph[c1].includes(c2)) {
 		graph[c1] = (graph[c1] || []).filter(x => x != c2);
 		graph[c2] = (graph[c2] || []).filter(x => x != c1);
 	}
@@ -159,6 +158,35 @@ function prune_graph(graph, captured, captured_coord) {
 	if ((r - 1) / 2 < CONFIG.n_rows - 1 && captured[(r - 1) / 2 + 1][(c - 1) / 2]) {
 		remove_edge(graph, coord_to_num([r + 1, c - 1]), coord_to_num([r + 1, c + 1]));
 	}
+}
+
+function game_over() {
+	let over = true;
+	for (let r = 0; r < CONFIG.n_rows; r++) {
+		for (let c = 0; c < CONFIG.n_cols; c++) {
+			over = over && STATE.captured[r][c];
+		}
+	}
+	return over;
+}
+
+function winning_player() {
+	let counts = [0, 0];
+	for (let r = 0; r < CONFIG.n_rows; r++) {
+		for (let c = 0; c < CONFIG.n_cols; c++) {
+			let p = STATE.captured[r][c];
+			if (0 < p) {
+				counts[p - 1]++;
+			}
+		}
+	}
+	if (counts[0] > counts[1]) {
+		return 1;
+	}
+	if (counts[1] > counts[0]) {
+		return 2;
+	}
+	return 0;
 }
 
 canvas.onclick = e => {
@@ -182,9 +210,19 @@ canvas.onclick = e => {
 			}
 		}
 
+		redraw();
+
+		// see if game is over
+		if (game_over()) {
+			setTimeout(_ => {
+				window.alert('player ' + winning_player() + ' won');
+				location.reload();
+			},
+					   10);
+		}
+
 		STATE.currentPlayer = STATE.currentPlayer == 1 ? 2 : 1;
 	}
-	redraw();
 };
 
 function redraw() {
