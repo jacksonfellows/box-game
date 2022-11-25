@@ -28,15 +28,19 @@ function draw_dots() {
 	for (let row = 0; row <= 2 * CONFIG.n_rows; row += 2) {
 		for (let col = 0; col <= 2 * CONFIG.n_cols; col += 2) {
 			ctx.beginPath();
-			ctx.arc(col, row, 2 / SCALE, 0, 2*Math.PI);
+			ctx.arc(col, row, 4 / SCALE, 0, 2*Math.PI);
 			ctx.fill();
 		}
 	}
 	ctx.restore();
 }
 
-function get_player_color(p) {
-	return ["", "#00ff00", "#0000ff"][p];
+function get_player_stroke(p) {
+	return ["", "#00aa00", "#0000aa"][p];
+}
+
+function get_player_fill(p) {
+	return ["", "#ddffdd", "#ddddff"][p];
 }
 
 function draw_board(board) {
@@ -54,15 +58,8 @@ function draw_board(board) {
 			start = [c, r - 1];
 			end = [c, r + 1];
 		}
-		ctx.strokeStyle = "#000000";
+		ctx.strokeStyle = get_player_stroke(i++ % 2 + 1);
 		ctx.lineWidth = 4 / SCALE;
-		ctx.beginPath();
-		ctx.moveTo(...start);
-		ctx.lineTo(...end);
-		ctx.stroke();
-
-		ctx.strokeStyle = get_player_color(i++ % 2 + 1);
-		ctx.lineWidth = 1.5 / SCALE;
 		ctx.beginPath();
 		ctx.moveTo(...start);
 		ctx.lineTo(...end);
@@ -78,7 +75,7 @@ function draw_captured(captured) {
 		for (let c = 1; c < 2 * CONFIG.n_cols; c += 2) {
 			let cap = STATE.captured[(r - 1) / 2][(c - 1) / 2];
 			if (cap) {
-				ctx.fillStyle = get_player_color(cap);
+				ctx.fillStyle = get_player_fill(cap);
 				ctx.beginPath();
 				ctx.moveTo(c - 1, r - 1);
 				ctx.lineTo(c + 1, r - 1);
