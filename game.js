@@ -218,11 +218,7 @@ function play_line(line) {
 
 	// see if game is over
 	if (game_over()) {
-		setTimeout(_ => {
-			window.alert('player ' + winning_player() + ' won');
-			location.reload();
-		},
-				   10);
+		console.log('player ' + winning_player() + ' won');
 	} else {
 		// switch turn
 		STATE.current_player = STATE.current_player == 1 ? 2 : 1;
