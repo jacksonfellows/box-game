@@ -186,17 +186,18 @@ function winning_player() {
 }
 
 function handle_player() {
-	if (STATE.current_player == 1) {
-		canvas.onclick = handle_player_click;
-	} else if (STATE.current_player == 2) {
+	// if (STATE.current_player == 1) {
+		// canvas.onclick = handle_player_click;
+	// } else if (STATE.current_player == 2) {
 		canvas.onclick = null;
-		play_line(get_ai_move());
-	}
+		setTimeout(
+			_ => play_line(random_ai()),
+			0
+		);
+	// }
 }
 
 function play_line(line) {
-	console.log('player ' + STATE.current_player + ' played ' + line);
-	
 	STATE.board.push(coord_to_num(line));
 	let [coord1, coord2] = coords_astride(line);
 
@@ -346,12 +347,27 @@ function coord_in_cycle(cycle, coord) {
 
 // AI
 
-function get_ai_move() {
-	for (let r = 0; r < 2 * CONFIG.n_rows + 1; r++) {
-		for (let c = 0; c < 2 * CONFIG.n_cols + 1; c++) {
-			if ((r % 2 != c % 2) && !STATE.board.includes(coord_to_num([r, c]))) {
-				return [r, c];
-			}
+function randint(max) {
+	return Math.floor(Math.random() * max);
+}
+
+function edge_inside_captured_area(edge, captured) {
+	let [r, c] = edge;
+	console.assert(r % 2 != c % 2);
+	if (r % 2 == 0) {
+		return r > 0 && STATE.captured[r / 2 - 1][(c - 1) / 2] && STATE.captured[r / 2][(c - 1) / 2];
+	} else {
+		return c > 0 && STATE.captured[(r - 1) / 2][c / 2 - 1] && STATE.captured[(r - 1) / 2][c / 2];
+	}
+}
+
+function random_ai() {
+	while (1) {
+		let r = randint(2 * CONFIG.n_rows + 1);
+		let c = randint(2 * CONFIG.n_cols + 1);
+		if ((r % 2 != c % 2) && !STATE.board.includes(coord_to_num([r, c])) && !edge_inside_captured_area([r, c], STATE.captured)) {
+			return [r, c];
 		}
 	}
 }
+
