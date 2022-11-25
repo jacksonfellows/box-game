@@ -47,7 +47,8 @@ function draw_board(board) {
 	ctx.save();
 	ctx.setTransform(TRANSFORM);
 	let i = 0;
-	for (let [r, c] of board) {
+	for (let num of board) {
+		let [r, c] = num_to_coord(num);
 		let start, end;
 		if (r % 2 == 0) {
 			// horizontal
@@ -103,7 +104,7 @@ var STATE = {
 	board: [],
 	cycles: [],
 	captured: make_empty_captured(),
-	currentPlayer: 1,
+	current_player: 1,
 	dot_graph: {}
 };
 
@@ -189,39 +190,62 @@ function winning_player() {
 	return 0;
 }
 
-canvas.onclick = e => {
+function handle_player() {
+	if (STATE.current_player == 1) {
+		canvas.onclick = handle_player_click;
+	} else if (STATE.current_player == 2) {
+		canvas.onclick = null;
+		play_line(get_ai_move());
+	}
+}
+
+function play_line(line) {
+	console.log('player ' + STATE.current_player + ' played ' + line);
+	
+	STATE.board.push(coord_to_num(line));
+	let [coord1, coord2] = coords_astride(line);
+
+	// update graph
+	add_edge(STATE.dot_graph, coord_to_num(coord1), coord_to_num(coord2));
+
+	// perform capturing
+	let coord_to_try = coord1; // could be coord2 doesn't matter
+	let all_cycles = find_all_cycles(STATE.dot_graph, coord_to_num(coord_to_try), []);
+	if (all_cycles.length > 0) {
+		let captured = all_cycles.map(get_captured).reduce((a, b) => a.length >= b.length ? a : b);
+		for (let [r,c] of captured) {
+			STATE.captured[(r - 1) / 2][(c - 1) / 2] = STATE.current_player;
+			prune_graph(STATE.dot_graph, STATE.captured, [r,c]);
+		}
+	}
+
+	redraw();
+
+	// see if game is over
+	if (game_over()) {
+		setTimeout(_ => {
+			window.alert('player ' + winning_player() + ' won');
+			location.reload();
+		},
+				   10);
+	} else {
+		// switch turn
+		STATE.current_player = STATE.current_player == 1 ? 2 : 1;
+
+		handle_player();
+	}
+}
+
+window.onload = _ => {
+	redraw();
+	handle_player();
+};
+
+function handle_player_click(e) {
 	let xy = apply_inverse_transform(TRANSFORM, [e.offsetX, e.offsetY]);
-	let [col_near,row_near] = xy.map(Math.round);
+	let [col_near, row_near] = xy.map(Math.round);
 	if (col_near % 2 != row_near % 2) {
-		STATE.board.push([row_near, col_near]);
-		let [coord1, coord2] = coords_astride([row_near, col_near]);
-
-		// update graph
-		add_edge(STATE.dot_graph, coord_to_num(coord1), coord_to_num(coord2));
-
-		// perform capturing
-		let coord_to_try = coord1; // could be coord2 doesn't matter
-		let all_cycles = find_all_cycles(STATE.dot_graph, coord_to_num(coord_to_try), []);
-		if (all_cycles.length > 0) {
-			let captured = all_cycles.map(get_captured).reduce((a, b) => a.length >= b.length ? a : b);
-			for (let [r,c] of captured) {
-				STATE.captured[(r - 1) / 2][(c - 1) / 2] = STATE.currentPlayer;
-				prune_graph(STATE.dot_graph, STATE.captured, [r,c]);
-			}
-		}
-
-		redraw();
-
-		// see if game is over
-		if (game_over()) {
-			setTimeout(_ => {
-				window.alert('player ' + winning_player() + ' won');
-				location.reload();
-			},
-					   10);
-		}
-
-		STATE.currentPlayer = STATE.currentPlayer == 1 ? 2 : 1;
+		play_line([row_near, col_near]);
 	}
 };
 
@@ -231,8 +255,6 @@ function redraw() {
 	draw_board(STATE.board);
 	draw_dots();
 }
-
-redraw();
 
 function coord_eq(a, b) {
 	return a[0] == b[0] && a[1] == b[1];
@@ -328,4 +350,16 @@ function coord_in_cycle(cycle, coord) {
 	}
 	// all good
 	return true;
+}
+
+// AI
+
+function get_ai_move() {
+	for (let r = 0; r < 2 * CONFIG.n_rows + 1; r++) {
+		for (let c = 0; c < 2 * CONFIG.n_cols + 1; c++) {
+			if ((r % 2 != c % 2) && !STATE.board.includes(coord_to_num([r, c]))) {
+				return [r, c];
+			}
+		}
+	}
 }
