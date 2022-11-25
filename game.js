@@ -241,7 +241,8 @@ function handle_player_click(e) {
 };
 
 function redraw() {
-	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	ctx.fillStyle = "#ffffff";
+	ctx.fillRect(0, 0, canvas.width, canvas.height);
 	draw_captured(STATE.captured);
 	draw_board(STATE.board);
 	draw_dots();
