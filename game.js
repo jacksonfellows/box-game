@@ -468,39 +468,6 @@ function get_score(state) {
 	return score;
 }
 
-// STUPID
-function set_equal(a, b) {
-	if (!a || !b) {
-		return false;
-	}
-	for (let x of a.values()) {
-		if (!b.has(x)) {
-			return false;
-		}
-	}
-	for (let x of b.values()) {
-		if (!a.has(x)) {
-			return false;
-		}
-	}
-	return true;
-}
-
-// STUPID
-function graph_equal(a, b) {
-	for (let [k, v] of Object.entries(a)) {
-		if (!set_equal(v, b[k])) {
-			return false;
-		}
-	}
-	for (let [k, v] of Object.entries(b)) {
-		if (!set_equal(v, a[k])) {
-			return false;
-		}
-	}
-	return true;
-}
-
 function min_max_ai_rec(state, n_steps) {
 	let best_score = -Infinity;
 	let best_move = null;
@@ -509,9 +476,6 @@ function min_max_ai_rec(state, n_steps) {
 	for (let line of moves) {
 		// see how good this move is
 		let state_copy = copy_state(state); // state.graph isn't copied
-
-		// let real_copy = copy_graph(state.graph);
-		// console.assert(graph_equal(real_copy, state.graph));
 		
 		do_move(state_copy, line, prune = false);
 		let score = get_score(state_copy);
@@ -527,9 +491,6 @@ function min_max_ai_rec(state, n_steps) {
 		// risky: undo move from graph!!
 		let [n1, n2] = coords_astride(line).map(coord_to_num);
 		remove_edge(state.graph, n1, n2);
-
-		// console.assert(graph_equal(real_copy, state.graph));
-		// console.assert(real_copy); // keep real_copy in scope for debugger
 
 		if (score > best_score) {
 			best_score = score;
