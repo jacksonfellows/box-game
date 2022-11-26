@@ -306,21 +306,16 @@ function num_to_coord(num) {
 	return [Math.floor(num / (2 * CONFIG.n_cols + 1)), num % (2 * CONFIG.n_cols + 1)];
 }
 
-function set_add(set, x) {
-	let new_set = new Set(set);
-	new_set.add(x);
-	return new_set;
-}
-
 function find_all_cycles(graph, num) {
 	return find_all_cycles_rec(graph, num, new Set(), num);
 }
 
 function find_all_cycles_rec(graph, num, visited, first) {
 	if (visited.size > 0 && num == first) {
-		return [visited];
+		return [new Set(visited)];	// copy visited
 	}
 	let cycles = [];
+	visited.add(num);
 	for (let neighbor_num of graph[num]) {
 		if (visited.size == 1 && neighbor_num == first) {
 			continue;
@@ -328,10 +323,11 @@ function find_all_cycles_rec(graph, num, visited, first) {
 		if (neighbor_num != first && visited.has(neighbor_num)) {
 			continue;
 		}
-		for (let cycle of find_all_cycles_rec(graph, neighbor_num, set_add(visited, num), first)) {
+		for (let cycle of find_all_cycles_rec(graph, neighbor_num, visited, first)) {
 			cycles.push(cycle);
 		}
 	}
+	visited.delete(num);
 	return cycles;
 }
 
