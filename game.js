@@ -438,6 +438,11 @@ function random_ai() {
 	return moves[randint(moves.length)];
 }
 
+function seq_ai() {
+	let moves = get_valid_moves(STATE);
+	return moves[0];
+}
+
 function copy_graph(graph) {
 	let new_graph = {};
 	for (let [k, v] of Object.entries(graph)) {
