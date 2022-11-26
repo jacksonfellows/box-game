@@ -108,11 +108,12 @@ function empty_state() {
 var STATE = empty_state();
 
 function get_captured(state, cycle) {
+	let edges = cycle_to_edges_set(cycle);
 	let captured = [];
 	for (let r = 1; r < 2 * CONFIG.n_rows; r += 2) {
 		for (let c = 1; c < 2 * CONFIG.n_cols; c += 2) {
 			if (!state.captured[(r - 1) / 2][(c - 1) / 2] &&
-				coord_in_cycle(cycle, [r, c])) {
+				coord_in_cycle(edges, [r, c])) {
 				captured.push([r, c]);
 			}
 		}
@@ -384,8 +385,7 @@ function cycle_to_edges_set(cycle) {
 	return edges;
 }
 
-function coord_in_cycle(cycle, coord) {
-	let edges = cycle_to_edges_set(cycle);
+function coord_in_cycle(edges, coord) {
 	let [r, c] = coord;
 	// up
 	let n_crosses = 0;
