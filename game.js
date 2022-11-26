@@ -227,10 +227,10 @@ function handle_player() {
 }
 
 function get_captured_by_move(state, coord_to_try) {
-	let all_cycles = find_all_cycles(state.graph, coord_to_num(coord_to_try), []);
+	let all_cycles = find_all_cycles(state.graph, coord_to_num(coord_to_try));
 	let captured = [];
 	if (all_cycles.length > 0) {
-		captured = all_cycles.map(x => get_captured(state, x)).reduce((a, b) => a.length >= b.length ? a : b);
+		captured = all_cycles.map(cycle => get_captured(state, cycle)).reduce((a, b) => a.length >= b.length ? a : b);
 	}
 	return captured;
 }
@@ -306,19 +306,31 @@ function num_to_coord(num) {
 	return [Math.floor(num / (2 * CONFIG.n_cols + 1)), num % (2 * CONFIG.n_cols + 1)];
 }
 
-function find_all_cycles(graph, num, visited) {
-	if (visited.length > 0 && visited[0] == num) {
-		return [visited.map(num_to_coord)];
+function set_add(set, x) {
+	let new_set = new Set(set);
+	new_set.add(x);
+	return new_set;
+}
+
+function find_all_cycles(graph, num) {
+	return find_all_cycles_rec(graph, num, new Set(), num);
+}
+
+function find_all_cycles_rec(graph, num, visited, first) {
+	if (visited.size > 0 && num == first) {
+		return [visited];
 	}
 	let cycles = [];
 	for (let neighbor_num of graph[num]) {
-		if (visited.length == 1 && neighbor_num == visited[0]) {
+		if (visited.size == 1 && neighbor_num == first) {
 			continue;
 		}
-		if (visited.slice(1).includes(neighbor_num)) {
+		if (neighbor_num != first && visited.has(neighbor_num)) {
 			continue;
 		}
-		cycles = cycles.concat(find_all_cycles(graph, neighbor_num, visited.concat([num])));
+		for (let cycle of find_all_cycles_rec(graph, neighbor_num, set_add(visited, num), first)) {
+			cycles.push(cycle);
+		}
 	}
 	return cycles;
 }
@@ -335,10 +347,14 @@ function edge_between(coord1, coord2) {
 
 function cycle_to_edges_set(cycle) {
 	let edges = new Set();
-	for (let i = 0; i < cycle.length - 1; i++) {
-		edges.add(coord_to_num(edge_between(cycle[i], cycle[i + 1])));
+	let last = null;
+	for (let val of cycle.values()) {
+		if (last !== null) {
+			edges.add(coord_to_num(edge_between(num_to_coord(last), num_to_coord(val))));
+		}
+		last = val;
 	}
-	edges.add(coord_to_num(edge_between(cycle[cycle.length - 1], cycle[0])));
+	edges.add(coord_to_num(edge_between(num_to_coord(last), num_to_coord(cycle.values().next().value))));
 	return edges;
 }
 
