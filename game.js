@@ -2,8 +2,8 @@ var canvas = document.getElementById("mycanvas");
 var ctx = canvas.getContext("2d");
 
 var CONFIG = {
-	n_rows: 20,
-	n_cols: 20
+	n_rows: 2,
+	n_cols: 2
 };
 
 var PAD = 0.2;
@@ -100,14 +100,14 @@ var STATE = {
 	board: [],
 	captured: make_empty_captured(),
 	current_player: 1,
-	dot_graph: {}
+	graph: {}
 };
 
-function get_captured(cycle) {
+function get_captured(state, cycle) {
 	let captured = [];
 	for (let r = 1; r < 2 * CONFIG.n_rows; r += 2) {
 		for (let c = 1; c < 2 * CONFIG.n_cols; c += 2) {
-			if (!STATE.captured[(r - 1) / 2][(c - 1) / 2] &&
+			if (!state.captured[(r - 1) / 2][(c - 1) / 2] &&
 				coord_in_cycle(cycle, [r, c])) {
 				captured.push([r, c]);
 			}
@@ -195,47 +195,61 @@ function handle_human() {
 	canvas.onclick = handle_player_click;
 }
 
+let MANUAL_OVERRIDE = false;
+
 function handle_ai(ai) {
 	return function() {
-		canvas.onclick = null;
-		setTimeout(
-			_ => play_line(ai()),
-			0
-		);
+		if (MANUAL_OVERRIDE) {
+			handle_human();
+		} else {
+			canvas.onclick = null;
+			setTimeout(
+				_ => play_line(ai(STATE)),
+				0
+			);
+		}
 	};
 }
 
 let PLAYERS_MAP = {
-	1: handle_ai(most_capture_ai),
-	2: handle_ai(most_capture_ai),
+	1: handle_ai(min_max_ai(1)),
+	2: handle_ai(min_max_ai(5)),
 };
 
 function handle_player() {
 	PLAYERS_MAP[STATE.current_player]();
 }
 
-function get_captured_by_move(coord_to_try, graph) {
-	let all_cycles = find_all_cycles(graph, coord_to_num(coord_to_try), []);
+function get_captured_by_move(state, coord_to_try) {
+	let all_cycles = find_all_cycles(state.graph, coord_to_num(coord_to_try), []);
 	let captured = [];
 	if (all_cycles.length > 0) {
-		captured = all_cycles.map(get_captured).reduce((a, b) => a.length >= b.length ? a : b);
+		captured = all_cycles.map(x => get_captured(state, x)).reduce((a, b) => a.length >= b.length ? a : b);
 	}
 	return captured;
 }
 
-function play_line(line) {
-	STATE.board.push(coord_to_num(line));
+function do_move(state, line) {
+	state.board.push(coord_to_num(line));
 	let [coord1, coord2] = coords_astride(line);
 
 	// update graph
-	add_edge(STATE.dot_graph, coord_to_num(coord1), coord_to_num(coord2));
+	add_edge(state.graph, coord_to_num(coord1), coord_to_num(coord2));
 
 	// perform capturing
-	let captured = get_captured_by_move(coord1, STATE.dot_graph); // could be coord2 doesn't matter
-	for (let [r,c] of captured) {
-		STATE.captured[(r - 1) / 2][(c - 1) / 2] = STATE.current_player;
-		prune_graph(STATE.dot_graph, STATE.captured, [r,c]);
+	let captured = get_captured_by_move(state, coord1); // could be coord2 doesn't matter
+	for (let [r, c] of captured) {
+		state.captured[(r - 1) / 2][(c - 1) / 2] = state.current_player;
+		prune_graph(state.graph, state.captured, [r, c]);
 	}
+}
+
+function get_next_player(current_player) {
+	return current_player == 1 ? 2 : 1;
+}
+
+function play_line(line) {
+	do_move(STATE, line);
 
 	redraw();
 
@@ -244,7 +258,7 @@ function play_line(line) {
 		console.log('player ' + winning_player() + ' won');
 	} else {
 		// switch turn
-		STATE.current_player = STATE.current_player == 1 ? 2 : 1;
+		STATE.current_player = get_next_player(STATE.current_player);
 
 		handle_player();
 	}
@@ -377,17 +391,17 @@ function edge_inside_captured_area(edge, captured) {
 	let [r, c] = edge;
 	console.assert(r % 2 != c % 2);
 	if (r % 2 == 0) {
-		return r > 0 && STATE.captured[r / 2 - 1][(c - 1) / 2] && STATE.captured[r / 2][(c - 1) / 2];
+		return r > 0 && captured[r / 2 - 1][(c - 1) / 2] && captured[r / 2][(c - 1) / 2];
 	} else {
-		return c > 0 && STATE.captured[(r - 1) / 2][c / 2 - 1] && STATE.captured[(r - 1) / 2][c / 2];
+		return c > 0 && captured[(r - 1) / 2][c / 2 - 1] && captured[(r - 1) / 2][c / 2];
 	}
 }
 
-function get_valid_moves() {
+function get_valid_moves(state) {
 	let moves = [];
 	for (let r = 0; r < 2 * CONFIG.n_rows + 1; r++) {
 		for (let c = 0; c < 2 * CONFIG.n_cols + 1; c++) {
-			if ((r % 2 != c % 2) && !STATE.board.includes(coord_to_num([r, c])) && !edge_inside_captured_area([r, c], STATE.captured)) {
+			if ((r % 2 != c % 2) && !state.board.includes(coord_to_num([r, c])) && !edge_inside_captured_area([r, c], state.captured)) {
 				moves.push([r, c]);
 			}
 		}
@@ -396,7 +410,7 @@ function get_valid_moves() {
 }
 
 function random_ai() {
-	let moves = get_valid_moves();
+	let moves = get_valid_moves(STATE);
 	return moves[randint(moves.length)];
 }
 
@@ -408,6 +422,23 @@ function copy_graph(graph) {
 	return new_graph;
 }
 
+function copy_captured(captured) {
+	let new_captured = [];
+	for (let row of captured) {
+		new_captured.push(row.slice());
+	}
+	return new_captured;
+}
+
+function copy_state(state) {
+	return {
+		board: state.board.slice(),
+		captured: copy_captured(state.captured),
+		current_player: state.current_player,
+		graph: copy_graph(state.graph),
+	};
+}
+
 function shuffle(arr) {
 	for (let i = arr.length - 1; i > 0; i--) {
 		let j = randint(i + 1);
@@ -417,22 +448,48 @@ function shuffle(arr) {
 	}
 }
 
-function most_capture_ai() {
-	let graph_copy = copy_graph(STATE.dot_graph);
-	let most_captured = -1;
+function get_score(state) {
+	let score = 0;
+	for (let row of state.captured) {
+		for (let x of row) {
+			if (x) {
+				score += x == state.current_player ? 1 : -1;
+			}
+		}
+	}
+	return score;
+}
+
+function min_max_ai_rec(state, n_steps) {
+	let best_score = -Infinity;
 	let best_move = null;
-	let moves = get_valid_moves();
+	let moves = get_valid_moves(state);
 	shuffle(moves);
 	for (let line of moves) {
 		// see how good this move is
-		let [coord1, coord2] = coords_astride(line);
-		add_edge(graph_copy, coord_to_num(coord1), coord_to_num(coord2));
-		let captured = get_captured_by_move(coord1, graph_copy);
-		if (captured.length > most_captured) {
-			most_captured = captured.length;
+		let state_copy = copy_state(state);
+		do_move(state_copy, line);
+		let score = get_score(state_copy);
+		// another level
+		if (n_steps > 0) {
+			state_copy.current_player = get_next_player(state_copy.current_player);
+			let rec = min_max_ai_rec(state_copy, n_steps - 1);
+			if (rec[0]) {
+				score = -rec[1];
+			}
+		}
+		if (score > best_score) {
+			best_score = score;
 			best_move = line;
 		}
-		remove_edge(graph_copy, coord_to_num(coord1), coord_to_num(coord2)); // cleanup!!
 	}
-	return best_move;
+	return [best_move, best_score];
+}
+
+function min_max_ai(n_steps) {
+	return function(state) {
+		let r = min_max_ai_rec(state, n_steps);
+		console.log(r);
+		return r[0];
+	};
 }
