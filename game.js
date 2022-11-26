@@ -96,12 +96,16 @@ function make_empty_captured() {
 	return captured;
 }
 
-var STATE = {
-	board: [],
-	captured: make_empty_captured(),
-	current_player: 1,
-	graph: {}
-};
+function empty_state() {
+	return {
+		board: [],
+		captured: make_empty_captured(),
+		current_player: 1,
+		graph: {}
+	};
+}
+
+var STATE = empty_state();
 
 function get_captured(state, cycle) {
 	let captured = [];
@@ -168,21 +172,21 @@ function prune_graph(graph, captured, captured_coord) {
 	}
 }
 
-function game_over() {
+function game_over(state) {
 	let over = true;
 	for (let r = 0; r < CONFIG.n_rows; r++) {
 		for (let c = 0; c < CONFIG.n_cols; c++) {
-			over = over && STATE.captured[r][c];
+			over = over && state.captured[r][c];
 		}
 	}
 	return over;
 }
 
-function winning_player() {
+function winning_player(state) {
 	let counts = [0, 0];
 	for (let r = 0; r < CONFIG.n_rows; r++) {
 		for (let c = 0; c < CONFIG.n_cols; c++) {
-			let p = STATE.captured[r][c];
+			let p = state.captured[r][c];
 			if (0 < p) {
 				counts[p - 1]++;
 			}
@@ -262,14 +266,40 @@ function play_line(line) {
 	redraw();
 
 	// see if game is over
-	if (game_over()) {
-		console.log('player ' + winning_player() + ' won');
+	if (game_over(STATE)) {
+		console.log('player ' + winning_player(STATE) + ' won');
 	} else {
 		// switch turn
 		STATE.current_player = get_next_player(STATE.current_player);
 
 		handle_player();
 	}
+}
+
+function play_ai_game(ai1, ai2) {
+	let state = empty_state();
+	while (!game_over(state)) {
+		do_move(state, (state.current_player == 1 ? ai1 : ai2)(state));
+		state.current_player = get_next_player(state.current_player);
+	}
+	return winning_player(state);
+}
+
+function rank_ais(ais, n_rounds) {
+	let results = [];
+	for (let i = 0; i < ais.length; i++) {
+		results.push([]);
+		for (let j = 0; j < ais.length; j++) {
+			let wins = 0;
+			for (let n = 0; n < n_rounds; n++) {
+				if (play_ai_game(ais[i], ais[j]) == 1) {
+					wins++;
+				}
+			}
+			results[i].push(wins / n_rounds);
+		}
+	}
+	return results;
 }
 
 window.onload = _ => {
@@ -429,13 +459,13 @@ function get_valid_moves(state) {
 	return moves;
 }
 
-function random_ai() {
-	let moves = get_valid_moves(STATE);
+function random_ai(state) {
+	let moves = get_valid_moves(state);
 	return moves[randint(moves.length)];
 }
 
-function seq_ai() {
-	let moves = get_valid_moves(STATE);
+function seq_ai(state) {
+	let moves = get_valid_moves(state);
 	return moves[0];
 }
 
