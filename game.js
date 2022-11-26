@@ -141,7 +141,13 @@ function add_edge(graph, c1, c2) {
 function remove_edge(graph, c1, c2) {
 	if (graph[c1] && graph[c2]) {
 		graph[c1].delete(c2);
+		if (graph[c1].size == 0) {
+			delete graph[c1];
+		}
 		graph[c2].delete(c1);
+		if (graph[c2].size == 0) {
+			delete graph[c2];
+		}
 	}
 }
 
@@ -229,7 +235,7 @@ function get_captured_by_move(state, coord_to_try) {
 	return captured;
 }
 
-function do_move(state, line) {
+function do_move(state, line, prune = true) {
 	state.board.push(coord_to_num(line));
 	let [coord1, coord2] = coords_astride(line);
 
@@ -240,7 +246,9 @@ function do_move(state, line) {
 	let captured = get_captured_by_move(state, coord1); // could be coord2 doesn't matter
 	for (let [r, c] of captured) {
 		state.captured[(r - 1) / 2][(c - 1) / 2] = state.current_player;
-		prune_graph(state.graph, state.captured, [r, c]);
+		if (prune) {
+			prune_graph(state.graph, state.captured, [r, c]);
+		}
 	}
 }
 
@@ -435,7 +443,7 @@ function copy_state(state) {
 		board: state.board.slice(),
 		captured: copy_captured(state.captured),
 		current_player: state.current_player,
-		graph: copy_graph(state.graph),
+		graph: state.graph, // copy_graph(state.graph),
 	};
 }
 
@@ -460,6 +468,39 @@ function get_score(state) {
 	return score;
 }
 
+// STUPID
+function set_equal(a, b) {
+	if (!a || !b) {
+		return false;
+	}
+	for (let x of a.values()) {
+		if (!b.has(x)) {
+			return false;
+		}
+	}
+	for (let x of b.values()) {
+		if (!a.has(x)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+// STUPID
+function graph_equal(a, b) {
+	for (let [k, v] of Object.entries(a)) {
+		if (!set_equal(v, b[k])) {
+			return false;
+		}
+	}
+	for (let [k, v] of Object.entries(b)) {
+		if (!set_equal(v, a[k])) {
+			return false;
+		}
+	}
+	return true;
+}
+
 function min_max_ai_rec(state, n_steps) {
 	let best_score = -Infinity;
 	let best_move = null;
@@ -467,8 +508,12 @@ function min_max_ai_rec(state, n_steps) {
 	shuffle(moves);
 	for (let line of moves) {
 		// see how good this move is
-		let state_copy = copy_state(state);
-		do_move(state_copy, line);
+		let state_copy = copy_state(state); // state.graph isn't copied
+
+		// let real_copy = copy_graph(state.graph);
+		// console.assert(graph_equal(real_copy, state.graph));
+		
+		do_move(state_copy, line, prune = false);
 		let score = get_score(state_copy);
 		// another level
 		if (n_steps > 0) {
@@ -478,6 +523,14 @@ function min_max_ai_rec(state, n_steps) {
 				score = -rec[1];
 			}
 		}
+
+		// risky: undo move from graph!!
+		let [n1, n2] = coords_astride(line).map(coord_to_num);
+		remove_edge(state.graph, n1, n2);
+
+		// console.assert(graph_equal(real_copy, state.graph));
+		// console.assert(real_copy); // keep real_copy in scope for debugger
+
 		if (score > best_score) {
 			best_score = score;
 			best_move = line;
